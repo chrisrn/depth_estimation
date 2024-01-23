@@ -1,0 +1,36 @@
+{"hyper_parameters": {
+   "batch_size": [64],
+   "epochs": [2],
+   "learning_rate": [0.001],
+   "optimizer": ["adamw"],
+   "grad_clip": [null],
+   "weight_decay": [0.02],
+   "momentum": [0.9]
+ },
+ "data": {
+   "data_dir": "../../datasets/mocap_parsed",
+   "num_workers": 0
+ },
+ "callbacks": {
+   "epoch_begin": 0,
+   "plateau_learning_rate": false,
+   "plateau_patience_epochs": 1,
+   "plateau_decay": 0.4,
+   "plateau_min_lr": 0.0000001,
+   "exponential_lr": false,
+   "num_epochs_per_decay": 20,
+   "lr_decay_factor": 0.25,
+   "one_cycle_lr": true
+ },
+ "model": {
+   "fine-tuning-file": "",
+   "exclude_layers" : ["classifier.1.weight", "classifier.1.bias"],
+   "load_weights_only": true,
+   "train_loaded_weights": true,
+   "log_predictions": false,
+   "cuda_visible_devices": "0",
+   "epochs_per_save": 10,
+   "results_dir": "results",
+   "steps_per_log": 100
+}
+}
