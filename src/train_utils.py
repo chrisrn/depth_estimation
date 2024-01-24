@@ -71,7 +71,7 @@ class DepthModelHandler(object):
         self.logs[['loss_train', 'loss_val', 'ssim_train', 'ssim_val']] = None
 
     # The default optimizer is adam, because it is used in most UNets.
-    def get_optimizer(self) -> torch.optim:
+    def get_optimizer(self):
         if self.optimizer_name == 'adam':
             return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate,
                                     weight_decay=self.weight_decay)
@@ -113,8 +113,7 @@ class DepthModelHandler(object):
         loss = self.loss_function(preds, mask)
         return loss.item(), preds
 
-    def run_epoch(self, scheduler_oc: torch.optim.lr_scheduler,
-                  epoch: int, mode='train') -> dict:
+    def run_epoch(self, scheduler_oc, epoch, mode='train'):
 
         if mode == 'train':
             self.model.train()
@@ -155,7 +154,7 @@ class DepthModelHandler(object):
 
         return _ssim, avg_loss
 
-    def get_lr(self, optimizer: torch.optim) -> float:
+    def get_lr(self, optimizer):
         for param_group in optimizer.param_groups:
             return param_group['lr']
 
@@ -208,7 +207,7 @@ class DepthModelHandler(object):
             self.optimizer = self.get_optimizer()
             self.start_epoch = 0
 
-    def save_model(self, epoch: int, results_dir: str, best=False):
+    def save_model(self, epoch, results_dir, best=False):
         model_dir = f'{results_dir}/model'
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
@@ -257,7 +256,7 @@ class DepthModelHandler(object):
 
         return self.logs.to_dict(), best_ssim
 
-    def get_callbacks(self) -> torch.optim.lr_scheduler:
+    def get_callbacks(self):
         if self.callbacks['exponential_lr']:
             return StepLR(optimizer=self.optimizer,
                           step_size=self.callbacks['num_epochs_per_decay'],
@@ -300,7 +299,7 @@ class UnNormalize(Normalize):
 
 
 @torch.no_grad()
-def plot_vals(imgs, targets, preds, n=4,figsize=(6,2),title=''):
+def plot_vals(imgs, targets, preds, n=4,figsize=(6, 2),title=''):
     plt.figure(figsize=figsize,dpi=150)
     r = 2 if n == 4 else 8
     c = 2

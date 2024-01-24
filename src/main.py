@@ -1,10 +1,8 @@
 import argparse
 import json
 import os
-import pandas as pd
 from itertools import product
 from datetime import datetime
-import torch
 from torch.utils.tensorboard import SummaryWriter
 from train_utils import DepthModelHandler, plot_vals, run_test
 from data_utils import DepthDataHandler
@@ -17,7 +15,6 @@ def main(config_file):
     os.environ["CUDA_VISIBLE_DEVICES"] = config['model']['cuda_visible_devices']
     hyper_parameters = config['hyper_parameters']
     param_values = [v for v in hyper_parameters.values()]
-    results = []
     timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     results_dir = f'{config["model"]["results_dir"]}/{timestamp}'
     max_ssim = 0

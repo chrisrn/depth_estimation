@@ -1,5 +1,4 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -27,6 +26,7 @@ class DepthDataset:
         augs = self.tfms(image=im, mask=dp)
         im, dp = augs['image'], augs['mask'] / 255.
         return im, dp.unsqueeze(0)
+
 
 class DepthDataHandler:
     def __init__(self, data_params: dict, batch_size: int):
@@ -64,12 +64,6 @@ class DepthDataHandler:
         ])
         return train_tfms, valid_tfms
 
-    def view_batch(self, train_loader):
-        dataiter = iter(train_loader)
-        images, labels = dataiter.next()
-        plt.imshow(images[1].view(48, 48).cpu())
-        plt.show()
-
     def get_data(self):
         csv_file = f'{self.data_dir}/nyu2_train.csv'
 
@@ -82,15 +76,11 @@ class DepthDataHandler:
         train_df.reset_index(drop=True, inplace=True)
         val_df.reset_index(drop=True, inplace=True)
         test_df.reset_index(drop=True, inplace=True)
-        train_df = train_df[:50]
-        val_df = val_df[:20]
-        test_df = test_df[:20]
         print(f'Num train samples: {len(train_df)}')
         print(f'Num val samples: {len(val_df)}')
         print(f'Num test samples: {len(test_df)}')
 
         train_tfms, valid_tfms = self.get_transforms()
-        # Blendshape dataset
         train_ds = DepthDataset(train_df, train_tfms)
         val_ds = DepthDataset(val_df, valid_tfms)
         test_ds = DepthDataset(test_df, valid_tfms)
@@ -105,6 +95,6 @@ class DepthDataHandler:
         test_loader = DataLoader(test_ds, self.batch_size, shuffle=True,
                                  num_workers=self.num_workers,
                                  pin_memory=True)
-        # self.view_batch(train_loader)
+
 
         return train_loader, val_loader, test_loader
