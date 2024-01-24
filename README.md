@@ -1,6 +1,6 @@
 # Depth estimation project
 ## General description
-In this repository 3 solutions for estimating the depth of pixels in images are implemented using the labeled [nyu_depth_v2](https://www.kaggle.com/datasets/soumikrakshit/nyu-depth-v2) dataset. The 1st solution is the training-evaluation of UNet architecture using PyTorch. The 2nd solution is a Random Forest Regression model using scikit learn. The 3rd solution is a ready-to-use pre-trained Transformer called DinoV2.
+In this repository 3 solutions for estimating the depth of pixels in images are implemented using the labeled [nyu_depth_v2](https://www.kaggle.com/datasets/soumikrakshit/nyu-depth-v2) dataset. The 1st solution is the training-evaluation of UNet architecture using PyTorch. The 2nd solution is a Random Forest Regression model using scikit learn. The 3rd solution is a ready-to-use pre-trained Transformer called DinoV2. There is no access to GPU so for the first 2 solutions there is no proper training in the whole dataset. But the 1st solution contains code for running into GPU. The experiments were done on a small subset to evaluate end-to-end running capability.
 ## Installation
 Create and activate python virtual environment:
 ```commandline
