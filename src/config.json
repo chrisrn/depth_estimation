@@ -1,14 +1,13 @@
 {"hyper_parameters": {
-   "batch_size": [64],
+   "batch_size": [16],
    "epochs": [2],
    "learning_rate": [0.001],
    "optimizer": ["adamw"],
-   "grad_clip": [null],
    "weight_decay": [0.02],
    "momentum": [0.9]
  },
  "data": {
-   "data_dir": "../../datasets/mocap_parsed",
+   "data_dir": "../data",
    "num_workers": 0
  },
  "callbacks": {
@@ -24,13 +23,12 @@
  },
  "model": {
    "fine-tuning-file": "",
-   "exclude_layers" : ["classifier.1.weight", "classifier.1.bias"],
+   "exclude_layers" : [""],
    "load_weights_only": true,
    "train_loaded_weights": true,
-   "log_predictions": false,
    "cuda_visible_devices": "0",
    "epochs_per_save": 10,
    "results_dir": "results",
-   "steps_per_log": 100
+   "steps_per_log": 50
 }
 }

@@ -6,7 +6,7 @@ class UNet(nn.Module):
     def __init__(self):
         super().__init__()
         self.model = smp.UnetPlusPlus(
-            encoder_name='resnext50_32x4d',
+            encoder_name='resnet18',
             in_channels=3,
             classes=1
         )

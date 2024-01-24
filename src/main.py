@@ -4,12 +4,13 @@ import os
 import pandas as pd
 from itertools import product
 from datetime import datetime
+import torch
 from torch.utils.tensorboard import SummaryWriter
-from train_utils import DepthModelHandler
+from train_utils import DepthModelHandler, plot_vals, run_test
 from data_utils import DepthDataHandler
 
 
-def main(config_file: str):
+def main(config_file):
     with open(config_file) as json_file:
         config = json.load(json_file)
 
@@ -19,6 +20,7 @@ def main(config_file: str):
     results = []
     timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
     results_dir = f'{config["model"]["results_dir"]}/{timestamp}'
+    max_ssim = 0
     for i, params in enumerate(product(*param_values)):
         config['hyper_parameters'] = {param: value for param, value in zip(hyper_parameters.keys(), params)}
         config['model']['results_dir'] = f'{results_dir}/exp_{i}'
@@ -29,33 +31,21 @@ def main(config_file: str):
         summary_writer = SummaryWriter(f'{results_dir}/exp_{i}/{str(config["hyper_parameters"])}')
         # Get data loaders
 
-        data_handler = DepthDataHandler(config['data_params'], config['hyper_parameters']['batch_size'])
-        train_loader, test_loader = data_handler.get_data()
+        data_handler = DepthDataHandler(config['data'], config['hyper_parameters']['batch_size'])
+        train_loader, val_loader, test_loader = data_handler.get_data()
         # Run training-testing
-        model_handler = get_model_handler(config, train_loader, test_loader,
-                                          summary_writer, config['data']['window_size'])
-        test_metrics = model_handler.run()
+        model_handler = DepthModelHandler(config, train_loader, val_loader, test_loader, summary_writer)
+        val_metrics, ssim = model_handler.run()
         # Results
-        test_metrics = {f'hparam/{metric}': value[-1] for metric, value in test_metrics.items()}
-        summary_writer.add_hparams(config["hyper_parameters"], test_metrics)
-        config['hyper_parameters'].update(test_metrics)
-        df = pd.DataFrame(config['hyper_parameters'], index=[i])
-        df['model'] = [model_handler.model]
-        df['test_loader'] = [test_loader]
-        df['class_names'] = [model_handler.classes]
-        results.append(df)
+        val_metrics = {f'hparam/{metric}': list(value.values())[-1] for metric, value in val_metrics.items()}
+        summary_writer.add_hparams(config["hyper_parameters"], val_metrics)
         summary_writer.close()
+        if ssim > max_ssim:
+            max_ssim = ssim
+            best_model = model_handler.model
 
-    results_df = pd.concat(results)
-    best_exp = results_df[results_df['hparam/loss'] == results_df['hparam/loss'].min()]
-    if config['model']['log_predictions']:
-        model_handler.tensorboard_predictions(best_exp, results_dir)
-    best_exp = best_exp.drop(['model', 'test_loader', 'class_names'], axis=1)
-    results_df = results_df.drop(['model', 'test_loader', 'class_names'], axis=1)
-    print('Best model:')
-    print(best_exp.T)
-    results_csv = os.path.dirname(config['model']['results_dir']) + '/results.csv'
-    results_df.to_csv(results_csv, index=False)
+    # Plot best experiment results on test set
+    run_test(best_model, test_loader)
 
 
 if __name__ == '__main__':

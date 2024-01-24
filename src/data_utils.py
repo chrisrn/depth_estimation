@@ -82,6 +82,9 @@ class DepthDataHandler:
         train_df.reset_index(drop=True, inplace=True)
         val_df.reset_index(drop=True, inplace=True)
         test_df.reset_index(drop=True, inplace=True)
+        train_df = train_df[:50]
+        val_df = val_df[:20]
+        test_df = test_df[:20]
         print(f'Num train samples: {len(train_df)}')
         print(f'Num val samples: {len(val_df)}')
         print(f'Num test samples: {len(test_df)}')

@@ -1,19 +1,18 @@
 import os
+import numpy as np
 from collections import OrderedDict
 import pandas as pd
+import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import torch
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, OneCycleLR
 from torch.utils.data import DataLoader
-from torch import Tensor
-from torchsummary import summary
 from torch.utils.tensorboard import SummaryWriter
-from torch.cuda.amp import GradScaler, autocast
 import torch.nn as nn
 from torchmetrics.image import StructuralSimilarityIndexMeasure as SSIM
-from torchmetrics.regression import MeanSquaredError as MSE
 from torchmetrics.collections import MetricCollection
+from torchvision.transforms import Normalize
 
 from UNet import UNet
 
@@ -22,6 +21,7 @@ class DepthModelHandler(object):
     def __init__(self,
                  config: dict,
                  train_loader: DataLoader,
+                 val_loader: DataLoader,
                  test_loader: DataLoader,
                  summary_writer: SummaryWriter):
         self.config = config
@@ -30,15 +30,13 @@ class DepthModelHandler(object):
         self.batch_size = train_params['batch_size']
         self.learning_rate = train_params['learning_rate']
         self.optimizer_name = train_params['optimizer']
-        self.grad_clip = train_params['grad_clip']
         self.weight_decay = train_params['weight_decay']
         self.momentum = train_params['momentum']
 
         self.train_loader = train_loader
+        self.val_loader = val_loader
         self.test_loader = test_loader
         self.summary_writer = summary_writer
-        self.num_classes = 1
-        self.classes = []
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # Callbacks dict
@@ -58,26 +56,19 @@ class DepthModelHandler(object):
 
         # Values of each module
         self.model = UNet().to(self.device)
-        self.model.trainable_encoder(trainable=False)
+        # self.model.trainable_encoder(trainable=False)
         self.loss_function = nn.MSELoss()
         self.optimizer = torch.optim.AdamW(self.model.parameters(),
                                            lr=self.learning_rate / 25.,
                                            weight_decay=self.weight_decay)
         self.start_epoch = 0
-        self.train_metrics = {}
-        self.test_metrics = {}
 
-        metrics = MetricCollection([
-            SSIM(data_range=(0, 1)),
-            MSE()
-        ]).to(self.device)
+        metrics = MetricCollection([SSIM(data_range=(0, 1))]).to(self.device)
         self.train_metrics = metrics.clone()
         self.val_metrics = metrics.clone()
 
         self.logs = pd.DataFrame()
-        self.logs[['loss_train', 'loss_val', 'ssim_train', 'ssim_val', 'mse_train', 'mse_val']] = None
-        self.scaler = GradScaler()
-
+        self.logs[['loss_train', 'loss_val', 'ssim_train', 'ssim_val']] = None
 
     # The default optimizer is adam, because it is used in most UNets.
     def get_optimizer(self) -> torch.optim:
@@ -104,106 +95,69 @@ class DepthModelHandler(object):
         else:
             raise ValueError('Supported optimizers: adam, adamw, sgd, adadelta, adagrad, rmsprop')
 
-    def get_metric(self, metric, output, target):
-        if metric == 'loss':
-            return self.loss_function(output, target)
-        else:
-            return self.accuracy(output, target)
+    def train_step(self, img, mask):
+        img, mask = img.to(self.device), mask.to(self.device)
+        preds = self.model(img)
+        loss = self.loss_function(preds, mask)
+        loss.backward()
+        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0, norm_type=2)
+        self.optimizer.step()
+        self.optimizer.zero_grad()
 
-    def train_step(self, img: Tensor, mask: Tensor) -> tuple:
-        with autocast():
-            img, mask = img.to(self.device), mask.to(self.device)
-            preds = self.model(img)
-
-            loss = self.loss_function(preds, mask)
-            self.scaler.scale(loss).backward()
-            self.scaler.unscale_(self.optimizer)
-            nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.0, norm_type=2)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            self.optimizer.zero_grad()
-
-        return loss.item()
+        return loss.item(), preds
 
     @torch.no_grad()
-    def evaluation_step(self, batch: Tensor, target: Tensor, epoch: int) -> tuple:
-        batch = batch.to(self.device)
-        target = target.to(self.device)
-        output = self.model(batch)
-        # calculate-the-batch-metrics
-        batch_metrics = {}
-        for metric in self.test_metrics.keys():
-            batch_metrics[metric] = self.get_metric(metric, output, target).item()
-
-        if self.num_classes > 1:
-            self.evaluate_per_class(output, target, epoch)
-        return batch_metrics, output, torch.mean(batch)
-
-    def log_per_class(self):
-        for index, row in self.per_class_metrics.iterrows():
-            for label in self.classes:
-                self.summary_writer.add_scalar(f'Per_class_accuracy/{label}',
-                                               row[label],
-                                               index - 1)
+    def evaluation_step(self, img, mask):
+        img, mask = img.to(self.device), mask.to(self.device)
+        preds = self.model(img)
+        loss = self.loss_function(preds, mask)
+        return loss.item(), preds
 
     def run_epoch(self, scheduler_oc: torch.optim.lr_scheduler,
                   epoch: int, mode='train') -> dict:
-
-        epoch_metrics = {}
-        for metric in self.train_metrics.keys():
-            epoch_metrics[metric] = 0.0
 
         if mode == 'train':
             self.model.train()
             data_loader = self.train_loader
         else:
             self.model.eval()
-            data_loader = self.test_loader
+            data_loader = self.val_loader
 
         step = 0
         print('{} mode'.format(mode))
-        train_data = tqdm(self.train_loader, total=len(self.train_loader))
+        progress_data = tqdm(data_loader, total=len(data_loader))
         epoch_loss = 0
-        for img, mask in train_data:
+        for img, mask in progress_data:
             if mode == 'train':
-                batch_loss = self.train_step(img, mask)
+                batch_loss, preds = self.train_step(img, mask)
+                self.train_metrics(preds, mask)
             else:
-                batch_metrics, outputs, batch_mean = self.evaluation_step(batch, target, epoch)
+                batch_loss, preds = self.evaluation_step(img, mask)
+                self.val_metrics(preds, mask)
+            progress_data.set_description(f'loss: {batch_loss:.3f}')
 
-            for metric in epoch_metrics.keys():
-                epoch_metrics[metric] += batch_metrics[metric]
+            epoch_loss += batch_loss
 
-            if self.callbacks['one_cycle_lr'] and epoch >= self.callbacks['epoch_begin']:
+            if mode == 'train' and self.callbacks['one_cycle_lr'] and epoch >= self.callbacks['epoch_begin']:
                 scheduler_oc.step()
 
             step += 1
+
             if step % self.steps_per_log == 0:
-                log = 'Step {}/{} \tbatch mean: {}\t'.format(step, len(data_loader), batch_mean)
-                for metric in epoch_metrics.keys():
-                    log += f'batch {metric}: {batch_metrics[metric]} \taverage {metric}: {epoch_metrics[metric] / step} \t'
-                print(log)
+                print(f'batch mse: {batch_loss} \taverage mse: {epoch_loss / step} \t')
+            del img, mask, preds, batch_loss
 
-        avg_metrics = {}
-        for metric in epoch_metrics.keys():
-            avg_metrics[metric] = epoch_metrics[metric] / step
+        avg_loss = epoch_loss / len(data_loader)
+        m = self.train_metrics.compute() if mode == 'train' else self.val_metrics.compute()
+        _ssim = m['StructuralSimilarityIndexMeasure'].cpu().item()
+        self.logs.loc[epoch, [f'loss_{mode}', f'ssim_{mode}']] = (avg_loss, _ssim)
+        self.train_metrics.reset() if mode == 'train' else self.val_metrics.reset()
 
-        if mode == 'test' and 'accuracy' in self.train_metrics:
-            for label in self.classes:
-                if self.per_class_correct.loc['total', label] != 0.0:
-                    self.per_class_metrics.loc[epoch, label] = self.per_class_correct.loc['correct', label] / \
-                                                               self.per_class_correct.loc['total', label]
-                else:
-                    self.per_class_metrics.loc[epoch, label] = 0.0
-
-        return avg_metrics
+        return _ssim, avg_loss
 
     def get_lr(self, optimizer: torch.optim) -> float:
         for param_group in optimizer.param_groups:
             return param_group['lr']
-
-    def accuracy(self, outputs, labels):
-        _, preds = torch.max(outputs, dim=1)
-        return torch.tensor(torch.sum(preds == labels).item() / len(preds))
 
     def remove_module(self, layers_dict):
         new_state_dict = OrderedDict()
@@ -242,12 +196,6 @@ class DepthModelHandler(object):
         else:
             self.start_epoch = checkpoint['epoch']
             self.optimizer = checkpoint['optimizer']
-            if 'train_metrics' in checkpoint:
-                self.train_metrics = checkpoint['train_metrics']
-            if 'test_metrics' in checkpoint:
-                self.test_metrics = checkpoint['test_metrics']
-            if 'per_class_metrics' in checkpoint:
-                self.per_class_metrics = checkpoint['per_class_metrics']
 
     def check_pretrained(self):
         if self.finetuning_file:
@@ -272,58 +220,42 @@ class DepthModelHandler(object):
             print('Model saved\n')
         torch.save({'epoch': epoch,
                     'model_weights': self.model.state_dict(),
-                    'optimizer': self.optimizer,
-                    'train_metrics': self.train_metrics,
-                    'test_metrics': self.test_metrics}, ckpt_file)
+                    'optimizer': self.optimizer}, ckpt_file)
 
-    def get_model_summary(self):
-        summary(self.model, (1, 48, 48))
-
-    def run(self) -> dict:
+    def run(self):
+        print(f'Num model parameters: {self.model._num_params()}')
         self.check_pretrained()
         if torch.cuda.is_available():
             self.model = nn.DataParallel(self.model)
-        # self.get_model_summary()
         scheduler = self.get_callbacks()
         best_ssim = -1e9
-        epoch_best_ssim = self.start_epoch
+        epoch_max_ssim = self.start_epoch
         for epoch in range(self.start_epoch + 1, self.epochs + self.start_epoch + 1):
             lr = self.get_lr(self.optimizer)
             print('Epoch: {} \t Learning rate {}'.format(epoch, lr))
-            avg_train_metrics = self.run_epoch(scheduler, epoch)
-            avg_test_metrics = self.run_epoch(scheduler, epoch, mode='test')
-
+            train_ssim, train_mse = self.run_epoch(scheduler, epoch)
+            val_ssim, val_mse = self.run_epoch(scheduler, epoch, mode='val')
             if epoch >= self.callbacks['epoch_begin']:
-                self.activate_callbacks(scheduler, avg_test_metrics['loss'])
+                self.activate_callbacks(scheduler, val_mse)
 
-            log = ''
-            for metric in self.train_metrics.keys():
-                self.train_metrics[metric].append(avg_train_metrics[metric])
-                self.test_metrics[metric].append(avg_test_metrics[metric])
-                log += f'Epoch train {metric}: {avg_train_metrics[metric]} \tEpoch test {metric}: {avg_test_metrics[metric]}\n'
-
-            print(log)
+            print(f'Epoch train ssim: {train_ssim} \tEpoch train mse: {train_mse}\n')
+            print(f'Epoch val ssim: {val_ssim} \tEpoch val mse: {val_mse}\n')
 
             if self.epochs_per_save and (epoch % self.epochs_per_save) == 0:
                 self.save_model(epoch, self.results_dir)
 
-            if avg_test_metrics['loss'] <= min_loss:
+            if val_ssim > best_ssim:
                 self.save_model(epoch, self.results_dir, best=True)
-                min_loss = avg_test_metrics['loss']
-                epoch_min_loss = epoch
+                best_ssim = val_ssim
+                epoch_max_ssim = epoch
+            self.summary_writer.add_scalar(f'Per_epoch/train_ssim', train_ssim, epoch)
+            self.summary_writer.add_scalar(f'Per_epoch/train_mse', train_mse, epoch)
+            self.summary_writer.add_scalar(f'Per_epoch/val_ssim', val_ssim, epoch)
+            self.summary_writer.add_scalar(f'Per_epoch/val_mse', val_mse, epoch)
 
-        print(f'Best loss = {min_loss}, epoch = {epoch_min_loss}')
-        # Add metrics to tensorboard
-        for metric in self.train_metrics.keys():
-            for i, (train_value, test_value) in enumerate(zip(self.train_metrics[metric], self.test_metrics[metric])):
-                self.summary_writer.add_scalar(f'Per_epoch/train_{metric}', train_value, i)
-                self.summary_writer.add_scalar(f'Per_epoch/test_{metric}', test_value, i)
+        print(f'Best ssim = {best_ssim}, epoch = {epoch_max_ssim}')
 
-        # Per class metrics to tensorboard
-        if self.num_classes > 1:
-            self.log_per_class()
-
-        return self.test_metrics
+        return self.logs.to_dict(), best_ssim
 
     def get_callbacks(self) -> torch.optim.lr_scheduler:
         if self.callbacks['exponential_lr']:
@@ -348,29 +280,69 @@ class DepthModelHandler(object):
         elif self.callbacks['plateau_learning_rate']:
             scheduler.step(epoch_test_loss)
 
-    @torch.no_grad()
-    def tensorboard_predictions(self, best_exp, results_dir):
-        model = best_exp['model'].values[0]
-        test_loader = best_exp['test_loader'].values[0]
-        class_names = best_exp['class_names'].values[0]
-        batch_size = best_exp['batch_size'].values[0]
-        # Tensorboard object
-        logdir = f'{results_dir}/log_predictions'
-        os.makedirs(logdir)
-        summary_writer = SummaryWriter(logdir)
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # Get predictions
-        for step, (batch, targets) in enumerate(test_loader):
-            batch = batch.to(device)
-            targets = targets.to(device)
-            output = model(batch)
-            preds = torch.sigmoid(output)
-            for i, label in enumerate(class_names):
-                targets_per_label = targets[:, i]
-                preds_per_label = preds[:, i]
-                sample = 0
-                for pred, target in zip(preds_per_label, targets_per_label):
-                    summary_writer.add_scalars(f'Best_model_predictions/{label}',
-                                               {'target': target.item(), 'prediction': pred.item()},
-                                               global_step=step * batch_size + sample)
-                    sample += 1
+
+def colored_depthmap(depth, d_min=None, d_max=None,cmap=plt.cm.inferno):
+    if d_min is None:
+        d_min = np.min(depth)
+    if d_max is None:
+        d_max = np.max(depth)
+    depth_relative = (depth - d_min) / (d_max - d_min)
+    return 255 * cmap(depth_relative)[:,:,:3]
+
+
+class UnNormalize(Normalize):
+    def __init__(self,*args,**kwargs):
+        mean = (0.485, 0.456, 0.406)
+        std = (0.229, 0.224, 0.225)
+        new_mean = [-m/s for m,s in zip(mean,std)]
+        new_std = [1/s for s in std]
+        super().__init__(new_mean, new_std, *args, **kwargs)
+
+
+@torch.no_grad()
+def plot_vals(imgs, targets, preds, n=4,figsize=(6,2),title=''):
+    plt.figure(figsize=figsize,dpi=150)
+    r = 2 if n == 4 else 8
+    c = 2
+    for i,idx in enumerate(np.random.randint(0,imgs.size(0),(n,))):
+        ax = plt.subplot(r,c,i + 1)
+        img,pred,gt = imgs[idx], preds[idx], targets[idx]
+        img = UnNormalize()(img)*255.
+        img,pred,gt = img.permute(1,2,0).numpy(), pred.permute(1,2,0).numpy(), gt.permute(1,2,0).numpy()
+        pred = colored_depthmap(np.squeeze(pred))
+        gt = colored_depthmap(np.squeeze(gt))
+        image_viz = np.hstack([img, gt, pred])
+        plt.imshow(image_viz.astype("uint8"))
+        plt.axis("off")
+    title = f'{title}\nimage/target/prediction' if len(title)!=0 else 'image/target/prediction'
+    plt.suptitle(title)
+    plt.show()
+
+
+def run_test(model, test_loader):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    all_imgs, all_preds, all_targets = [], [], []
+    with torch.no_grad():
+        for img, mask in tqdm(test_loader, total=len(test_loader)):
+            img, mask = img.to(device), mask.to(device)
+            preds = model(img)
+            all_imgs.append(img)
+            all_preds.append(preds)
+            all_targets.append(mask)
+
+    metrics = MetricCollection([SSIM(data_range=(0, 1))]).to(device)
+    test_metrics = metrics.clone()
+    test_metrics(
+        torch.vstack(all_preds),
+        torch.vstack(all_targets)
+    )
+    m = test_metrics.compute()
+    title = f"SSIM: {m['StructuralSimilarityIndexMeasure'].cpu().item():.3f}"
+    plot_vals(
+        torch.vstack(all_imgs).cpu(),
+        torch.vstack(all_targets).cpu(),
+        torch.vstack(all_preds).cpu(),
+        n=16,
+        figsize=(10, 15),
+        title=title
+    )
