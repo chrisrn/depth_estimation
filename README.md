@@ -1,6 +1,6 @@
 # Depth estimation project
 ## General description
-In this repository 3 solutions for estimating the depth of pixels in images are implemented using the labeled [nyu_depth_v2](https://www.kaggle.com/datasets/soumikrakshit/nyu-depth-v2) dataset. The 1st solution is the training-evaluation of UNet architecture using PyTorch. The 2nd solution is a Random Forest Regression model using scikit learn. The 3rd solution is a ready-to-use pre-trained Transformer called DinoV2. There is no access to GPU so for the first 2 solutions there is no proper training in the whole dataset. But the 1st solution contains code for running into GPU. The experiments were done on a small subset to evaluate end-to-end running capability.
+In this repository 3 solutions for estimating the depth of pixels in images are implemented using the labeled [nyu_depth_v2](https://www.kaggle.com/datasets/soumikrakshit/nyu-depth-v2) dataset. The 1st solution is the training-evaluation of UNet architecture using PyTorch. The 2nd solution is a Random Forest Regression model using scikit learn. The 3rd solution is a ready-to-use pre-trained Transformer called DinoV2. There is no access to GPU so for the first 2 solutions there is no proper training in the whole dataset. But the 1st solution contains code for running into GPU. The experiments were done on a small subset to evaluate end-to-end running capability. The whole project was done in almost 8 hours (2 mornings) and the final commits are some micro-fixes.
 ## Installation
 Create and activate python virtual environment:
 ```commandline
@@ -18,13 +18,18 @@ Then install all the packages:
 ```commandline
 pip install -e .
 ```
+After pip install, all the packages are installed for all the 3 solutions.
+## Dataset and pre-processing
+The `data_view` notebook is used to get a first idea of the data we have. The pre-processing in the 1st pytorch solution contains standard processing transforms of horizontal flips, random brightness, random resize etc. and finally a resize of `224x224` and normalization using imagenet mean-std values. The validation-test sets transforms contain only the final resize and normalization. The pre-processing applied on the 2nd solution is the resize to `224x224` and imagenet normalization on both training-test data.
 ## How to run the UNet pipeline
 There is only one script to run inside the `src` folder:
 ```bash
 python main.py
 ```
-which takes a default one argument, the `config.json` file. This file contains `hyper_parameters` to set up different experiments, `data` for data directory and num workers (we can use 8 if we are on GPU), `callbacks` to activate different learning rate plans and `model` for finetuning a model. Before running the experiments, you can move the `data` folder from the dataset you downloaded into the repository for better flexibility. After running, a folder named `results` contains the results of all the different experiments and we can view them on tensorboard.
-The U-Net architecture is designed to capture both local and global features effectively. U-Net is originally designed for semantic segmentation tasks, where it excels at capturing fine-grained details and boundaries in images. This capability is beneficial for depth estimation, as it allows the network to differentiate between objects and understand the spatial relationships within the scene. In this solution the `segmentation_models_pytorch` library used form pytorch which provides unets with different encoders-decoders (here we use resnet18 with almost 16M parameters).
+which takes a default one argument, the `config.json` file. This file contains `hyper_parameters` to set up different experiments, `data` for data directory and num workers (we can use 8 if we are on GPU), `callbacks` to activate different learning rate plans and `model` for finetuning a model. The `epoch_begin` flag in `callbacks` is the starting epoch for activating them. The learning rate plan followed is the one-cycle for faster training of the network and a finer understanding of the optimal learning rate. In the case of one-cycle plan, the maximum lr is the `learning_rate` flag inside the `hyper_parameters` field and the starting lr of the cycle is lr / 25. Before running the experiments, you can move the `data` folder from the dataset you downloaded into the repository for better flexibility. After running, a folder named `results` contains the results of all the different experiments and we can view them on tensorboard.
+The U-Net architecture is designed to capture both local and global features effectively. U-Net is originally designed for semantic segmentation tasks, where it excels at capturing fine-grained details and boundaries in images. This capability is beneficial for depth estimation, as it allows the network to differentiate between objects and understand the spatial relationships within the scene. In this solution the [segmentation_models_pytorch](https://segmentation-modelspytorch.readthedocs.io/en/latest/) library used form pytorch which provides unets with different encoders-decoders and we can view them in the encoders section with the number of parameters (here we use resnet18 with almost 16M parameters).
+![alt text](https://www.researchgate.net/profile/Jae-Cho-17/publication/350169922/figure/fig1/AS:1066008957706240@1631167749655/Monocular-depth-estimation-network-We-designed-a-variant-of-the-U-Net-architecture.png)
+In our implementation the input dimensions after pre-processing are `224x224x3` and the output mask `224x224x1`
 ## How to run the Random Forest Regression pipeline
 ```bash
 python main_sklearn.py
@@ -33,9 +38,24 @@ This script takes 2 arguments, `data_dir` for the data directory (default `../da
 
 ## Evaluation
 The metrics used for evaluation are the mean squared error (MSE) and the structural similarity index (SSIM). The SSIM is a perceptual metric that takes into account the structural similarity of the two images. SSIM is calculated by comparing the local patterns of the two images, taking into account the luminance, contrast, and structure of the images. SSIM is more robust to noise and small changes than MSE, but it is also more computationally expensive to calculate. In general, SSIM is preferred over MSE for image quality assessment because it provides a more accurate measure of how humans perceive the similarity of two images. However, MSE is still a useful metric, especially when speed is important.
+![alt text](https://vicuesoft.com/glossary/ssim-ms-ssim.png)
 
 ## Ready-to-use approaches
-3 state-of-the-art approaches that can be used without training are:
-* [DinoV2](https://github.com/facebookresearch/dinov2) transformer from facebook research. This is also a solution which can be used by running the `dinov2` notebook which loads the pre-trained model from [Hugging Face](https://huggingface.co/facebook/dpt-dinov2-base-nyu) and you can see how to run it inside the notebook.
-* [EVP](https://github.com/lavreniuk/evp) (Enhanced Visual Perception) which exploits also text content for the depth estimation.
-* [MIM](https://github.com/SwinTransformer/MIM-Depth-Estimation) (Masked Image Modeling) which provides pre-trained transformers on the NYU dataset.
+3 state-of-the-art approaches that can be used without training and give great results on  NYU v2  and KITTI datasets are:
+### [DinoV2](https://github.com/facebookresearch/dinov2) 14 Apr 2023 
+A self-supervised model from facebook research. The RMSE is 0.279 on NYU v2 dataset. DINOv2 has a Vision Transformer (ViT) head that you can use to compute embeddings out of the box for image-to-image retrieval and classification tasks. The pre-trained DINOv2 weights range from 84.2 MB for the smallest model to 4.2 GB for the largest model. This is also a solution which can be used by running the `dinov2` notebook which loads the pre-trained model from [Hugging Face](https://huggingface.co/facebook/dpt-dinov2-base-nyu) and you can see how to run it inside the notebook. The reason of choosing this method is because it is an easy-to-run model from the transformers library and it gives great predictions using only the image content in some lines of code. It is also the only model available on hugging face pre-trained on nyu v2 dataset.
+![alt text](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/dpt_architecture.jpg)
+The RMSE is reported on different architectures when training a linear classifier on top of 1 or 4 transformer layers:
+![alt text](https://d3i71xaburhd42.cloudfront.net/5a9cb1b3dc4655218b3deeaf4a2417a9a8cd0891/15-Table11-1.png)
+### [EVP](https://github.com/lavreniuk/evp) (Enhanced Visual Perception) 13 Dec 2023 
+which exploits also text content for the depth estimation. The RMSE is 0.224 on NYU v2 dataset. An Inverse Multi-Attentive Feature Refinement (IMAFR) module is developed which enhances feature learning capabilities by aggregating spatial information from higher pyramid levels. Second, a novel image-text alignment module is developed for improved feature extraction of the Stable Diffusion backbone. The resulting architecture is suitable for a wide variety of tasks and it can achieve high performance in the context of single-image depth estimation with a specialized decoder using classification-based bins and referring segmentation with an off-the-shelf decoder. Comprehensive experiments conducted on established datasets show that EVP achieves state-of-the-art results in single-image depth estimation for indoor (NYU Depth v2, 11.8% RMSE improvement over VPD) and outdoor (KITTI) environments. You can also try a [demo](https://huggingface.co/spaces/MykolaL/evp) on Hugging Face.
+![alt text](https://github.com/Lavreniuk/EVP/raw/main/figs/intro.png)
+The results comparing to other methods on NYU v2 dataset:
+![alt text](https://lavreniuk.github.io/EVP/images/table1.jpg)
+### [Depth Anything](https://github.com/LiheYoung/Depth-Anything?tab=readme-ov-file) 19 Jan 2024
+Which is a zero-shot depth estimation method and utilized both labeled and unlabeled images for training. Distinguished from prior works that laboriously construct diverse labeled datasets, the value of unlabeled images is highlighted in enhancing the data coverage.
+Solid line: flow of labeled images, dotted line: unlabeled images. The value of large-scale unlabeled images is epecially highlighted. The S denotes adding strong perturbations. To equip the depth estimation model with rich semantic priors, an auxiliary constraint is enforced between the online student model and a frozen encoder to preserve the semantic capability
+![alt text](https://depth-anything.github.io/static/images/pipeline.png)
+You can also try a [demo](https://huggingface.co/spaces/LiheYoung/Depth-Anything) on Hugging Face.
+The results on NYUv2 dataset comparing with other methods. We can see that the RMSE is the lowesrt comparing to EVP and Dino:
+![alt text](https://depth-anything.github.io/static/images/compare_indomain_nyu.png)

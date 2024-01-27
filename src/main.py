@@ -4,11 +4,15 @@ import os
 from itertools import product
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
-from train_utils import DepthModelHandler, plot_vals, run_test
+from train_utils import DepthModelHandler, run_test
 from data_utils import DepthDataHandler
 
 
 def main(config_file):
+    """
+    Starts hyperparameter search and training-evaluation
+    :param config_file: str, path to config file
+    """
     with open(config_file) as json_file:
         config = json.load(json_file)
 
@@ -31,7 +35,7 @@ def main(config_file):
         data_handler = DepthDataHandler(config['data'], config['hyper_parameters']['batch_size'])
         train_loader, val_loader, test_loader = data_handler.get_data()
         # Run training-testing
-        model_handler = DepthModelHandler(config, train_loader, val_loader, test_loader, summary_writer)
+        model_handler = DepthModelHandler(config, train_loader, val_loader, summary_writer)
         val_metrics, ssim = model_handler.run()
         # Results
         val_metrics = {f'hparam/{metric}': list(value.values())[-1] for metric, value in val_metrics.items()}

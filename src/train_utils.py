@@ -19,11 +19,17 @@ from UNet import UNet
 
 class DepthModelHandler(object):
     def __init__(self,
-                 config: dict,
-                 train_loader: DataLoader,
-                 val_loader: DataLoader,
-                 test_loader: DataLoader,
-                 summary_writer: SummaryWriter):
+                 config,
+                 train_loader,
+                 val_loader,
+                 summary_writer):
+        """
+        Training-evaluation class for depth model.
+        :param config: dict, with config.json values
+        :param train_loader: DataLoader, training data
+        :param val_loader: DataLoader, validation data
+        :param summary_writer: SummaryWriter, tensorboard writer
+        """
         self.config = config
         train_params = config['hyper_parameters']
         self.epochs = train_params['epochs']
@@ -35,12 +41,13 @@ class DepthModelHandler(object):
 
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.test_loader = test_loader
         self.summary_writer = summary_writer
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # Callbacks dict
         self.callbacks = config['callbacks']
+        if self.callbacks['one_cycle_lr']:
+            self.learning_rate = self.learning_rate / 25.0
 
         # Fine-tuning file to continue training
         model_params = config['model']
@@ -54,15 +61,16 @@ class DepthModelHandler(object):
         # Steps to print results
         self.steps_per_log = model_params['steps_per_log']
 
-        # Values of each module
+        # Model, loss and optimizer
         self.model = UNet().to(self.device)
-        # self.model.trainable_encoder(trainable=False)
         self.loss_function = nn.MSELoss()
         self.optimizer = torch.optim.AdamW(self.model.parameters(),
-                                           lr=self.learning_rate / 25.,
+                                           lr=self.learning_rate,
                                            weight_decay=self.weight_decay)
+        # Flag in case of retraining
         self.start_epoch = 0
 
+        # Metrics
         metrics = MetricCollection([SSIM(data_range=(0, 1))]).to(self.device)
         self.train_metrics = metrics.clone()
         self.val_metrics = metrics.clone()
@@ -76,7 +84,7 @@ class DepthModelHandler(object):
             return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate,
                                     weight_decay=self.weight_decay)
         elif self.optimizer_name == 'adamw':
-            return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate / 25.,
+            return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate,
                                      weight_decay=self.weight_decay)
         elif self.optimizer_name == 'sgd':
             return torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
@@ -96,6 +104,12 @@ class DepthModelHandler(object):
             raise ValueError('Supported optimizers: adam, adamw, sgd, adadelta, adagrad, rmsprop')
 
     def train_step(self, img, mask):
+        """
+        Performs a single training step.
+        :param img: Tensor, input image
+        :param mask: Tensor, ground truth mask
+        :return: float loss value and Tensor predictions
+        """
         img, mask = img.to(self.device), mask.to(self.device)
         preds = self.model(img)
         loss = self.loss_function(preds, mask)
@@ -108,12 +122,25 @@ class DepthModelHandler(object):
 
     @torch.no_grad()
     def evaluation_step(self, img, mask):
+        """
+        Performs a single evaluation step.
+        :param img: Tensor, input image
+        :param mask: Tensor, ground truth mask
+        :return: float loss value and Tensor predictions
+        """
         img, mask = img.to(self.device), mask.to(self.device)
         preds = self.model(img)
         loss = self.loss_function(preds, mask)
         return loss.item(), preds
 
     def run_epoch(self, scheduler_oc, epoch, mode='train'):
+        """
+        Runs one epoch of training or evaluation.
+        :param scheduler_oc: OneCycleLR, scheduler for OneCycleLR (if is activated)
+        :param epoch: int, current epoch
+        :param mode: str, train or val
+        :return: float ssim value and float loss value
+        """
 
         if mode == 'train':
             self.model.train()
@@ -155,10 +182,20 @@ class DepthModelHandler(object):
         return _ssim, avg_loss
 
     def get_lr(self, optimizer):
+        """
+        Get current learning rate.
+        :param optimizer: Optimizer obj, optimizer
+        :return: float, learning rate
+        """
         for param_group in optimizer.param_groups:
             return param_group['lr']
 
     def remove_module(self, layers_dict):
+        """
+        Removes module from layers dict, because a model trained on GPU has the module prefix
+        :param layers_dict: dict, model layers dict
+        :return: dict, model layers dict without module prefix
+        """
         new_state_dict = OrderedDict()
         for name, v in layers_dict.items():
             if 'module' in name:
@@ -167,6 +204,11 @@ class DepthModelHandler(object):
         return new_state_dict
 
     def load_layers(self, checkpoint, model_dict):
+        """
+        Loads model layers from checkpoint
+        :param checkpoint: str, path to checkpoint
+        :param model_dict: dict, model layers dict
+        """
         new_state_dict = self.remove_module(checkpoint)
         # Keep matching layers
         pretrained_dict = {k: v for k, v in new_state_dict.items() if k in model_dict}
@@ -189,6 +231,10 @@ class DepthModelHandler(object):
                     param.requires_grad = False
 
     def check_ckpt_params(self, checkpoint):
+        """
+        Checks checkpoint parameters
+        :param checkpoint: dict, checkpoint parameters
+        """
         if self.load_weights_only:
             self.optimizer = self.get_optimizer()
             self.start_epoch = 0
@@ -197,6 +243,9 @@ class DepthModelHandler(object):
             self.optimizer = checkpoint['optimizer']
 
     def check_pretrained(self):
+        """
+        Checks if a pre-trained model is loaded
+        """
         if self.finetuning_file:
             print(f'Pre-trained model loaded from: {self.finetuning_file}')
             checkpoint = torch.load(self.finetuning_file, map_location='cpu')
@@ -208,6 +257,12 @@ class DepthModelHandler(object):
             self.start_epoch = 0
 
     def save_model(self, epoch, results_dir, best=False):
+        """
+        Saves model
+        :param epoch: int, current epoch
+        :param results_dir: str, path to results directory
+        :param best: bool, if True saves best model
+        """
         model_dir = f'{results_dir}/model'
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
@@ -222,6 +277,10 @@ class DepthModelHandler(object):
                     'optimizer': self.optimizer}, ckpt_file)
 
     def run(self):
+        """
+        Runs the training-evaluation loop
+        :return: dict metrics, float best ssim
+        """
         print(f'Num model parameters: {self.model._num_params()}')
         self.check_pretrained()
         if torch.cuda.is_available():
@@ -257,6 +316,9 @@ class DepthModelHandler(object):
         return self.logs.to_dict(), best_ssim
 
     def get_callbacks(self):
+        """
+        Returns callbacks
+        """
         if self.callbacks['exponential_lr']:
             return StepLR(optimizer=self.optimizer,
                           step_size=self.callbacks['num_epochs_per_decay'],
@@ -272,8 +334,12 @@ class DepthModelHandler(object):
         else:
             return None
 
-    def activate_callbacks(self, scheduler: torch.optim.lr_scheduler,
-                           epoch_test_loss: float):
+    def activate_callbacks(self, scheduler, epoch_test_loss):
+        """
+        Activates callbacks
+        :param scheduler: Scheduler obj, for learning rate
+        :param epoch_test_loss: float, test loss
+        """
         if self.callbacks['exponential_lr']:
             scheduler.step()
         elif self.callbacks['plateau_learning_rate']:
@@ -281,6 +347,13 @@ class DepthModelHandler(object):
 
 
 def colored_depthmap(depth, d_min=None, d_max=None,cmap=plt.cm.inferno):
+    """
+    Converts depth map to RGB for plotting
+    :param depth: numpy array, depth map
+    :param d_min: float or int, min value
+    :param d_max: float or int, max value
+    :param cmap: plotting colormap
+    """
     if d_min is None:
         d_min = np.min(depth)
     if d_max is None:
@@ -291,6 +364,9 @@ def colored_depthmap(depth, d_min=None, d_max=None,cmap=plt.cm.inferno):
 
 class UnNormalize(Normalize):
     def __init__(self,*args,**kwargs):
+        """
+        Unnormalizes image
+        """
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
         new_mean = [-m/s for m,s in zip(mean,std)]
@@ -300,6 +376,15 @@ class UnNormalize(Normalize):
 
 @torch.no_grad()
 def plot_vals(imgs, targets, preds, n=4,figsize=(6, 2),title=''):
+    """
+    Plots n random images from dataset
+    :param imgs: Tensor, images
+    :param targets: Tensor, targets
+    :param preds: Tensor, predictions
+    :param n: int, number of images to plot
+    :param figsize: tuple, figure size
+    :param title: str, title
+    """
     plt.figure(figsize=figsize,dpi=150)
     r = 2 if n == 4 else 8
     c = 2
@@ -319,6 +404,11 @@ def plot_vals(imgs, targets, preds, n=4,figsize=(6, 2),title=''):
 
 
 def run_test(model, test_loader):
+    """
+    Runs best model on test data and plots results
+    :param model: UNet, model
+    :param test_loader: DataLoader, test data
+    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     all_imgs, all_preds, all_targets = [], [], []
     with torch.no_grad():

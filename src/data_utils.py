@@ -8,10 +8,21 @@ from sklearn.model_selection import train_test_split
 
 class DepthDataset:
     def __init__(self, df, tfms):
+        """
+        Depth dataset class.
+        :param df: DataFrame, with paths to images and depth maps
+        :param tfms: Transforms, for image augmentation
+        """
         self.df = df
         self.tfms = tfms
 
     def open_im(self, p, gray=False):
+        """
+        Open image.
+        :param p: str, path to image
+        :param gray: bool, whether to convert to grayscale
+        :return: numpy array, image
+        """
         im = cv.imread(str(p))
         im = cv.cvtColor(im, cv.COLOR_BGR2GRAY if gray else cv.COLOR_BGR2RGB)
         return im
@@ -29,12 +40,20 @@ class DepthDataset:
 
 
 class DepthDataHandler:
-    def __init__(self, data_params: dict, batch_size: int):
+    def __init__(self, data_params, batch_size):
+        """
+        Data handler for depth model.
+        :param data_params: dict, with data values from config.json
+        :param batch_size: int, batch size
+        """
         self.data_dir = data_params['data_dir']
         self.num_workers = data_params['num_workers']
         self.batch_size = batch_size
 
     def get_transforms(self):
+        """
+        Transforms for training and validation data.
+        """
         sample_tfms = [
             A.HorizontalFlip(),
             A.GaussNoise(p=0.2),
@@ -65,6 +84,10 @@ class DepthDataHandler:
         return train_tfms, valid_tfms
 
     def get_data(self):
+        """
+        Loads data from csv file and creates dataloaders
+        :return: train-val-test Dataloaders
+        """
         csv_file = f'{self.data_dir}/nyu2_train.csv'
 
         df = pd.read_csv(csv_file, header=None)

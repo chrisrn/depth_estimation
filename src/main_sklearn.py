@@ -9,6 +9,11 @@ import cv2 as cv
 
 
 def image_processing(path):
+    """
+    Processes image
+    :param path: str, path to image
+    :return: ndarray, processed image
+    """
     img = cv.imread(path)
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     img = cv.resize(img, (224, 224))
@@ -26,6 +31,11 @@ def image_processing(path):
 
 
 def mask_processing(path):
+    """
+    Processes mask
+    :param path: str, path to mask
+    :return: ndarray, processed mask
+    """
     img = cv.imread(path)
     img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     img = cv.resize(img, (224, 224))
@@ -39,6 +49,12 @@ def mask_processing(path):
 
 
 def process_set(imgs_set, masks_set):
+    """
+    Processes subset of data (training or testing)
+    :param imgs_set: Series, images
+    :param masks_set: Series, masks
+    :return: ndarrays, X, y
+    """
     images, masks = [], []
     for img_path, mask_path in zip(imgs_set, masks_set):
         images.append(image_processing(img_path))
@@ -52,6 +68,11 @@ def process_set(imgs_set, masks_set):
 
 
 def main(data_dir, slice):
+    """
+    Runs the training and testing of regressor for depth estimation
+    :param data_dir: str, path to data
+    :param slice: int, number of samples to use
+    """
     csv_file = f'{data_dir}/nyu2_train.csv'
 
     print('Load and process data')
