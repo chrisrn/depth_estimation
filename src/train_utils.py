@@ -7,8 +7,6 @@ from tqdm.auto import tqdm
 import torch
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, OneCycleLR
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 import torch.nn as nn
 from torchmetrics.image import StructuralSimilarityIndexMeasure as SSIM
 from torchmetrics.collections import MetricCollection
@@ -46,8 +44,6 @@ class DepthModelHandler(object):
 
         # Callbacks dict
         self.callbacks = config['callbacks']
-        if self.callbacks['one_cycle_lr']:
-            self.learning_rate = self.learning_rate / 25.0
 
         # Fine-tuning file to continue training
         model_params = config['model']
@@ -329,7 +325,7 @@ class DepthModelHandler(object):
                                      patience=self.callbacks['plateau_patience_epochs'],
                                      min_lr=self.callbacks['plateau_min_lr'])
         elif self.callbacks['one_cycle_lr']:
-            return OneCycleLR(self.optimizer, self.learning_rate,
+            return OneCycleLR(self.optimizer, max_lr=self.learning_rate*25,
                               epochs=self.epochs, steps_per_epoch=len(self.train_loader))
         else:
             return None
