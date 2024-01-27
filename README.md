@@ -49,7 +49,9 @@ A self-supervised model from facebook research. The RMSE is 0.279 on NYU v2 data
 The RMSE is reported on different architectures when training a linear classifier on top of 1 or 4 transformer layers:
 ![plot](readme_files/15-Table11-1.png)
 ### [EVP](https://github.com/lavreniuk/evp) (Enhanced Visual Perception) 13 Dec 2023 
-which exploits also text content for the depth estimation. The RMSE is 0.224 on NYU v2 dataset. An Inverse Multi-Attentive Feature Refinement (IMAFR) module is developed which enhances feature learning capabilities by aggregating spatial information from higher pyramid levels. Second, a novel image-text alignment module is developed for improved feature extraction of the Stable Diffusion backbone. The resulting architecture is suitable for a wide variety of tasks and it can achieve high performance in the context of single-image depth estimation with a specialized decoder using classification-based bins and referring segmentation with an off-the-shelf decoder. Comprehensive experiments conducted on established datasets show that EVP achieves state-of-the-art results in single-image depth estimation for indoor (NYU Depth v2, 11.8% RMSE improvement over VPD) and outdoor (KITTI) environments. You can also try a [demo](https://huggingface.co/spaces/MykolaL/evp) on Hugging Face.
+which exploits also text content for the depth estimation. The RMSE is 0.224 on NYU v2 dataset. An Inverse Multi-Attentive Feature Refinement (IMAFR) module is developed which enhances feature learning capabilities by aggregating spatial information from higher pyramid levels. 
+![alt text](https://lavreniuk.github.io/EVP/images/my_new2v2.jpg)
+Second, a novel image-text alignment module is developed for improved feature extraction of the Stable Diffusion backbone. The resulting architecture is suitable for a wide variety of tasks and it can achieve high performance in the context of single-image depth estimation with a specialized decoder using classification-based bins and referring segmentation with an off-the-shelf decoder. Comprehensive experiments conducted on established datasets show that EVP achieves state-of-the-art results in single-image depth estimation for indoor (NYU Depth v2, 11.8% RMSE improvement over VPD) and outdoor (KITTI) environments. You can also try a [demo](https://huggingface.co/spaces/MykolaL/evp) on Hugging Face.
 ![alt text](https://github.com/Lavreniuk/EVP/raw/main/figs/intro.png)
 The results comparing to other methods on NYU v2 dataset:
 ![alt text](https://lavreniuk.github.io/EVP/images/table1.jpg)
@@ -58,5 +60,5 @@ Which is a zero-shot depth estimation method and utilized both labeled and unlab
 Solid line: flow of labeled images, dotted line: unlabeled images. The value of large-scale unlabeled images is epecially highlighted. The S denotes adding strong perturbations. To equip the depth estimation model with rich semantic priors, an auxiliary constraint is enforced between the online student model and a frozen encoder to preserve the semantic capability
 ![alt text](https://depth-anything.github.io/static/images/pipeline.png)
 You can also try a [demo](https://huggingface.co/spaces/LiheYoung/Depth-Anything) on Hugging Face.
-The results on NYUv2 dataset comparing with other methods. We can see that the RMSE is the lowest comparing to EVP and Dino:
+We can see that the RMSE on NYUv2 dataset is the lowest comparing to EVP and Dino:
 ![alt text](https://depth-anything.github.io/static/images/compare_indomain_nyu.png)
