@@ -50,7 +50,8 @@ The RMSE is reported on different architectures when training a linear classifie
 ![plot](readme_files/15-Table11-1.png)
 ### [EVP](https://github.com/lavreniuk/evp) (Enhanced Visual Perception) 13 Dec 2023 
 which exploits also text content for the depth estimation. The RMSE is 0.224 on NYU v2 dataset. An Inverse Multi-Attentive Feature Refinement (IMAFR) module is developed which enhances feature learning capabilities by aggregating spatial information from higher pyramid levels. 
-<img src="https://lavreniuk.github.io/EVP/images/my_new2v2.jpg" alt="text" width="30%"/>
+
+<img src="https://lavreniuk.github.io/EVP/images/my_new2v2.jpg" alt="text" width="40%"/>
 
 Second, a novel image-text alignment module is developed for improved feature extraction of the Stable Diffusion backbone. The resulting architecture is suitable for a wide variety of tasks and it can achieve high performance in the context of single-image depth estimation with a specialized decoder using classification-based bins and referring segmentation with an off-the-shelf decoder. Comprehensive experiments conducted on established datasets show that EVP achieves state-of-the-art results in single-image depth estimation for indoor (NYU Depth v2, 11.8% RMSE improvement over VPD) and outdoor (KITTI) environments. You can also try a [demo](https://huggingface.co/spaces/MykolaL/evp) on Hugging Face.
 ![alt text](https://github.com/Lavreniuk/EVP/raw/main/figs/intro.png)
