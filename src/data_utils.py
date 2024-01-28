@@ -91,9 +91,7 @@ class DepthDataHandler:
         csv_file = f'{self.data_dir}/nyu2_train.csv'
 
         df = pd.read_csv(csv_file, header=None)
-        df[0] = df[0].map(lambda x: f'../{x}')
-        df[1] = df[1].map(lambda x: f'../{x}')
-
+        df = '../' + df
         train_df, val_df = train_test_split(df, test_size=0.1, shuffle=True)
         val_df, test_df = train_test_split(val_df, test_size=0.1, shuffle=True)
         train_df.reset_index(drop=True, inplace=True)

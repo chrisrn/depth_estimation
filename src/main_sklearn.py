@@ -1,11 +1,12 @@
 import argparse
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+import cv2 as cv
+
 from skimage.metrics import structural_similarity
 from skimage.metrics import mean_squared_error
-import cv2 as cv
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
 
 
 def image_processing(path):
@@ -48,6 +49,18 @@ def mask_processing(path):
     return img
 
 
+def get_grid_params(model_name):
+    """
+    Returns grid parameters for model
+    :param model_name: str, model name
+    :return: dict, grid parameters
+    """
+    if model_name == 'KNN':
+        return dict(n_neighbors=np.array([3, 5, 10]))
+    else:
+        return dict(n_estimators=np.array([3, 5, 10]))
+
+
 def process_set(imgs_set, masks_set):
     """
     Processes subset of data (training or testing)
@@ -77,9 +90,9 @@ def main(data_dir, slice):
 
     print('Load and process data')
     df = pd.read_csv(csv_file, header=None)
+    df = '../' + df
     df = df[:slice]
-    df[0] = df[0].map(lambda x: f'../{x}')
-    df[1] = df[1].map(lambda x: f'../{x}')
+
     # Split the data into training and testing sets
     imgs_train, imgs_test, masks_train, masks_test = train_test_split(df[0], df[1],
                                                                       test_size=0.1,
@@ -91,15 +104,15 @@ def main(data_dir, slice):
     X_test, y_test = process_set(imgs_test, masks_test)
 
     print(f'Input shape: {X_train.shape}')
-    print('Train regressor')
-    regressor = RandomForestRegressor(n_estimators=5, random_state=0, oob_score=True, verbose=2)
+
+    regressor = RandomForestRegressor(n_estimators=10, verbose=2)
     regressor.fit(X_train, y_train)
 
     print('Evaluate test set')
     y_pred = regressor.predict(X_test)
 
     # Evaluate the model
-    ssim = structural_similarity(y_test, y_pred)
+    ssim = structural_similarity(y_test, y_pred, data_range=np.max(y_pred) - np.min(y_pred))
     print(f'SSIM: {ssim}')
     mse = mean_squared_error(y_test, y_pred)
     print(f'Mean Squared Error: {mse}')
