@@ -50,7 +50,7 @@ def main(config_file):
     best_sd = torch.load(f'{results_dir}/exp_{best_exp}/model/best_model.pth.tar')
     best_model.load_state_dict(best_sd['model_weights'])
     # Plot best experiment results on test set
-    run_test(best_model, test_loader)
+    run_test(best_model, test_loader, f'{results_dir}/exp_{best_exp}')
 
 
 if __name__ == '__main__':

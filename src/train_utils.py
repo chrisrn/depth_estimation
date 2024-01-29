@@ -371,12 +371,13 @@ class UnNormalize(Normalize):
 
 
 @torch.no_grad()
-def plot_vals(imgs, targets, preds, n=4,figsize=(6, 2),title=''):
+def plot_vals(imgs, targets, preds, results_dir, n=4,figsize=(6, 2),title=''):
     """
     Plots n random images from dataset
     :param imgs: Tensor, images
     :param targets: Tensor, targets
     :param preds: Tensor, predictions
+    :param results_dir: str, path to results directory
     :param n: int, number of images to plot
     :param figsize: tuple, figure size
     :param title: str, title
@@ -394,17 +395,18 @@ def plot_vals(imgs, targets, preds, n=4,figsize=(6, 2),title=''):
         image_viz = np.hstack([img, gt, pred])
         plt.imshow(image_viz.astype("uint8"))
         plt.axis("off")
-        plt.imsave(f'results/image_{i}.jpg', image_viz.astype("uint8"))
+        plt.imsave(f'{results_dir}/image_{i}.jpg', image_viz.astype("uint8"))
     title = f'{title}\nimage/target/prediction' if len(title)!=0 else 'image/target/prediction'
     plt.suptitle(title)
     plt.show()
 
 
-def run_test(model, test_loader):
+def run_test(model, test_loader, results_dir):
     """
     Runs best model on test data and plots results
     :param model: UNet, model
     :param test_loader: DataLoader, test data
+    :param results_dir: str, results directory of best experiment
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     all_imgs, all_preds, all_targets = [], [], []
@@ -428,6 +430,7 @@ def run_test(model, test_loader):
         torch.vstack(all_imgs).cpu(),
         torch.vstack(all_targets).cpu(),
         torch.vstack(all_preds).cpu(),
+        results_dir,
         n=16,
         figsize=(10, 15),
         title=title
