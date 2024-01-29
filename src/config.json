@@ -1,6 +1,6 @@
 {"hyper_parameters": {
-   "batch_size": [16],
-   "epochs": [10],
+   "batch_size": [64],
+   "epochs": [3],
    "learning_rate": [4.0e-5],
    "optimizer": ["adamw"],
    "weight_decay": [0.02],
