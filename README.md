@@ -31,6 +31,20 @@ The U-Net architecture is designed to capture both local and global features eff
 ![plot](readme_files/Monocular-depth-estimation-network-We-designed-a-variant-of-the-U-Net-architecture.png).
 
 In our implementation the input dimensions after pre-processing are `224x224x3` and the output mask `224x224x1`
+### Results of UNet
+Below we can see some result depth maps (image/target/prediction) after training a UNet with mobilenet v2 encoder-decoder which is the smallest one available. After a long training of only 3 epochs on CPU the model achieved an SSIM=0.88. If we use a deeper encoder-decoder model (like resnet 18) and train for more epochs on GPU the results will be promising.
+
+<p float="left">
+  <img src="readme_files/image_2.jpg" width="50" />
+  <img src="readme_files/image_3.jpg" width="50" /> 
+  <img src="readme_files/image_5.jpg" width="50" />
+</p>
+<p float="left">
+  <img src="readme_files/image_8.jpg" width="50" />
+  <img src="readme_files/image_10.jpg" width="50" /> 
+  <img src="readme_files/image_15.jpg" width="50" />
+</p>
+
 ## How to run the sklearn regression pipeline
 In this solution we demonstrate the process of choosing the best model after cross-validation and grid-search on a small subset of data. If we had more memory to run it faster, then of course we would try more regression models using a bigger subset or all the data if possible. In this case we are choosing only 3 models, Random Forest, Gradient Boosting and KNN regressors. The results are not reliable because we use small models and a small subset. We just implement the process of choosing the best model in [sklearn_best_model](https://github.com/chrisrn/depth_estimation/blob/master/src/sklearn_best_model.ipynb) which can be scaled to more and bigger models and also more data.
 There is also a seperate script which runs the best model after running the notebook and it also contains the functions for the data processing.
