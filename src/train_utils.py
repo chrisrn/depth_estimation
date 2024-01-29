@@ -12,6 +12,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure as SSIM
 from torchmetrics.collections import MetricCollection
 from torchvision.transforms import Normalize
 
+from UNet_plus_plus import UNet_plus_plus
 from UNet import UNet
 
 
@@ -47,6 +48,7 @@ class DepthModelHandler(object):
 
         # Fine-tuning file to continue training
         model_params = config['model']
+        self.model_name = model_params['model_name']
         self.finetuning_file = model_params['fine-tuning-file']
         self.exclude_layers = model_params['exclude_layers']
         self.load_weights_only = model_params['load_weights_only']
@@ -58,7 +60,10 @@ class DepthModelHandler(object):
         self.steps_per_log = model_params['steps_per_log']
 
         # Model, loss and optimizer
-        self.model = UNet().to(self.device)
+        if self.model_name == 'unet':
+            self.model = UNet().to(self.device)
+        else:
+            self.model = UNet_plus_plus().to(self.device)
         self.loss_function = nn.MSELoss()
         self.optimizer = torch.optim.AdamW(self.model.parameters(),
                                            lr=self.learning_rate,
@@ -272,12 +277,15 @@ class DepthModelHandler(object):
                     'model_weights': self.model.state_dict(),
                     'optimizer': self.optimizer}, ckpt_file)
 
+    def num_params(self, ):
+        return sum([p.numel() for p in self.model.parameters() if p.requires_grad])
+
     def run(self):
         """
         Runs the training-evaluation loop
         :return: dict metrics, float best ssim
         """
-        print(f'Num model parameters: {self.model._num_params()}')
+        print(f'Num model parameters: {self.num_params()}')
         self.check_pretrained()
         if torch.cuda.is_available():
             self.model = nn.DataParallel(self.model)
