@@ -35,14 +35,14 @@ In our implementation the input dimensions after pre-processing are `224x224x3` 
 Below we can see some result depth maps (image/target/prediction) after training a UNet with mobilenet v2 encoder-decoder which is the smallest one available. After a long training of only 3 epochs on CPU the model achieved an SSIM=0.88. If we use a deeper encoder-decoder model (like resnet 18) and train for more epochs on GPU the results will be promising.
 
 <p float="left">
-  <img src="readme_files/image_2.jpg" width="50" />
-  <img src="readme_files/image_3.jpg" width="50" /> 
-  <img src="readme_files/image_5.jpg" width="50" />
+  <img src="readme_files/image_2.jpg" width="50%" />
+  <img src="readme_files/image_3.jpg" width="50%" /> 
+  <img src="readme_files/image_5.jpg" width="50%" />
 </p>
 <p float="left">
-  <img src="readme_files/image_8.jpg" width="50" />
-  <img src="readme_files/image_10.jpg" width="50" /> 
-  <img src="readme_files/image_15.jpg" width="50" />
+  <img src="readme_files/image_8.jpg" width="50%" />
+  <img src="readme_files/image_10.jpg" width="50%" /> 
+  <img src="readme_files/image_15.jpg" width="50%" />
 </p>
 
 ## How to run the sklearn regression pipeline
