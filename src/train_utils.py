@@ -283,7 +283,6 @@ class DepthModelHandler(object):
             self.model = nn.DataParallel(self.model)
         scheduler = self.get_callbacks()
         best_ssim = -1e9
-        best_model = self.model
         epoch_max_ssim = self.start_epoch
         for epoch in range(self.start_epoch + 1, self.epochs + self.start_epoch + 1):
             lr = self.get_lr(self.optimizer)
@@ -302,7 +301,6 @@ class DepthModelHandler(object):
             if val_ssim > best_ssim:
                 self.save_model(epoch, self.results_dir, best=True)
                 best_ssim = val_ssim
-                best_model = self.model
                 epoch_max_ssim = epoch
             self.summary_writer.add_scalar(f'Per_epoch/train_ssim', train_ssim, epoch)
             self.summary_writer.add_scalar(f'Per_epoch/train_mse', train_mse, epoch)
