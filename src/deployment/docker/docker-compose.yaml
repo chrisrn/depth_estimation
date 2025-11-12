@@ -1,0 +1,17 @@
+services:
+  triton:
+    image: nvcr.io/nvidia/tritonserver:25.10-py3
+    platform: linux/amd64   # if on Apple Silicon
+    command: >
+      tritonserver
+      --model-repository=/models
+      --http-port=8000
+      --grpc-port=8001
+      --metrics-port=8002
+      --log-verbose=1
+    volumes:
+      - ../triton_model_repo:/models:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
